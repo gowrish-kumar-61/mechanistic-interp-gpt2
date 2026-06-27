@@ -1,0 +1,7 @@
+torch>=2.1.0
+transformers>=4.36.0
+numpy>=1.26.0
+matplotlib>=3.8.0
+seaborn>=0.13.0
+transformer_lens>=1.19.0
+tqdm>=4.66.0
