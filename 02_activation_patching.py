@@ -2,14 +2,12 @@
 02 — Activation Patching on Induction Task
 
 WHY NOT IOI?
-──────────────
 IOI (Indirect Object Identification) requires a model that learned the task
 from training data. Random/synthetic weights have no IOI circuit.
 LD_clean ≈ LD_corrupted → no gap → patching recovers noise, not signal.
 
 WHAT WE DO INSTEAD:
-───────────────────
-Use the INDUCTION TASK — which our planted IH at L5H1 DOES handle.
+Use the INDUCTION TASK, which our planted IH at L5H1 DOES handle.
 
 Protocol:
   Clean prompt:     [A B C D  A B C D]   (repeated)
@@ -29,7 +27,6 @@ Protocol:
   If L=5, H=1 shows high recovery → IH is the causal component.
 
 ACTIVATION PATCHING MATH:
-──────────────────────────
 Let:
   LD_clean     = metric on clean run         (induction working)
   LD_corrupted = metric on corrupted run     (induction broken)
@@ -50,14 +47,13 @@ from core.model import gpt2_forward, config_from_weights, load_weights, get_toke
 from core.tokenizer import tokenize
 from core.synthetic_weights import build_synthetic_weights, PTH_LAYER, PTH_HEAD, IH_LAYER, IH_HEAD
 from core.metrics import patching_metric
-from core.visualize import plot_patching_heatmap
+from core. visualize import plot_patching_heatmap
 from tqdm import tqdm
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 SEQ_HALF = 8  # small k for speed (total seq = 16)
 
 # INDUCTION PATCHING SETUP
-
 def make_induction_prompts(tok, k=SEQ_HALF, seed=42, device="cpu"):
     """
     Clean:     [t0 t1 t2 ... t_{k-1}  t0 t1 t2 ... t_{k-1}]
@@ -96,7 +92,7 @@ def induction_ld(logits: torch.Tensor, clean_ids: torch.Tensor, k: int, batch=0)
     At position k+i (second occurrence of t_i), the IH should boost t_{i+1}.
     LD = logit(t_{i+1}) at position k+i, averaged over i=0..k-2.
 
-    Higher = model more strongly predicts the "inductively correct" next token.
+    Higher = the model more strongly predicts the "inductively correct" next token.
     """
     total = 0.0
     count = 0
@@ -108,13 +104,9 @@ def induction_ld(logits: torch.Tensor, clean_ids: torch.Tensor, k: int, batch=0)
         count += 1
     return total / max(count, 1)
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # BASELINES
-# ══════════════════════════════════════════════════════════════════════════════
-
 def measure_baselines(clean_ids, corr_ids, W, k):
-    with torch.no_grad():
+    with  torch.no_grad():
         logits_clean, cache_clean = gpt2_forward(clean_ids, W)
         logits_corr,  cache_corr  = gpt2_forward(corr_ids,  W)
 
@@ -132,11 +124,7 @@ def measure_baselines(clean_ids, corr_ids, W, k):
 
     return ld_clean, ld_corr, cache_clean, cache_corr
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # HEAD PATCHING SWEEP
-# ══════════════════════════════════════════════════════════════════════════════
-
 def run_head_patching(clean_ids, corr_ids, W, ld_clean, ld_corr, cache_clean, k,
                       n_layers=12, n_heads=12):
     """
@@ -157,11 +145,7 @@ def run_head_patching(clean_ids, corr_ids, W, ld_clean, ld_corr, cache_clean, k,
             recovery[L, H] = patching_metric(ld_p, ld_clean, ld_corr)
     return recovery
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # RESIDUAL STREAM PATCHING (LAYER-LEVEL)
-# ══════════════════════════════════════════════════════════════════════════════
-
 def run_resid_patching(clean_ids, corr_ids, W, ld_clean, ld_corr, cache_clean, k):
     """
     Patch entire residual stream at each point:
@@ -185,11 +169,7 @@ def run_resid_patching(clean_ids, corr_ids, W, ld_clean, ld_corr, cache_clean, k
             results[key].append(patching_metric(ld_p, ld_clean, ld_corr))
     return results
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # MAIN
-# ══════════════════════════════════════════════════════════════════════════════
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default=None, help="HF model name (gpt2, gpt2-xl, etc). Omit for synthetic.")
@@ -221,7 +201,7 @@ if __name__ == "__main__":
         print("Proceeding with sweep anyway to show patching infrastructure works.")
         print()
 
-    # ── Head-level patching ────────────────────────────────────────────────────
+    # Head-level patching
     recovery = run_head_patching(
         clean_ids, corr_ids, W,
         ld_clean, ld_corr, cache_clean, SEQ_HALF,
@@ -239,14 +219,14 @@ if __name__ == "__main__":
         bar = "█" * max(1, int(abs(val) * 30))
         print(f"  {name:<7} {val:+.4f}  {bar}{mark}")
 
-    # ── Heatmap ────────────────────────────────────────────────────────────────
+    # Heatmap
     plot_patching_heatmap(
         recovery,
         title=f"Head Output Patching Recovery\n(clean→corrupted, induction task)\nPlanted: L{IH_LAYER}H{IH_HEAD}=IH, L{PTH_LAYER}H{PTH_HEAD}=PTH",
         fname="patching_heads.png",
     )
 
-    # ── Residual stream patching ───────────────────────────────────────────────
+    # Residual stream patching
     resid = run_resid_patching(
         clean_ids, corr_ids, W, ld_clean, ld_corr, cache_clean, SEQ_HALF
     )
@@ -256,7 +236,7 @@ if __name__ == "__main__":
         print(f"  {key:5s}: " + "  ".join(f"{v:+.2f}" for v in vals))
     print()
 
-    # ── Manual verification: directly check L5H1 recovery ─────────────────────
+    # Manual verification: directly check L5H1 recovery
     print(f"\nDirect test: patch ONLY L{IH_LAYER}H{IH_HEAD} (planted IH):")
     hook = f"attn.{IH_LAYER}.head.{IH_HEAD}.out"
     with torch.no_grad():
