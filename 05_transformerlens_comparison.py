@@ -12,7 +12,6 @@ This script serves TWO purposes:
      on your own machine (with pip install transformer_lens).
 
 TL vs Manual — Key Differences:
-─────────────────────────────────
   1. Hook names:
        Manual:  cache["attn.5.pattern"]       → [B, H, S, S]
        TL:      cache["pattern", 5]           → [B, H, S, S]  (via ActivationCache)
@@ -61,11 +60,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 USE_REAL_TL = "--real" in sys.argv
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # SECTION A: API MAPPING REFERENCE
-# ══════════════════════════════════════════════════════════════════════════════
-
 def print_api_mapping():
     print("=" * 65)
     print("  TransformerLens ↔ Manual Implementation API Mapping")
@@ -110,12 +105,8 @@ def print_api_mapping():
         print(f"  Manual: {manual}")
         print(f"  TL:     {tl}")
     print()
-
-
-# ══════════════════════════════════════════════════════════════════════════════
+  
 # SECTION B: INDUCTION SCORE (OUR IMPL vs WHAT TL WOULD GIVE)
-# ══════════════════════════════════════════════════════════════════════════════
-
 def run_manual_induction(W, tok, k=40):
     """
     Run induction score detection on our planted model.
@@ -142,15 +133,7 @@ def run_manual_induction(W, tok, k=40):
             src = i + 1
             scores[L] += pat[:, dst, src]    # [H]
     scores /= (k - 1)
-
-    # TL equivalent (commented):
-    # _, cache = model.run_with_cache(tokens, names_filter=lambda n: "pattern" in n)
-    # for L in range(12):
-    #     pat = cache["pattern", L][0]   # [H, 2k, 2k]   same math, different key
-    #     ...
-
     return scores, tokens
-
 
 def run_manual_pt_score(W, k=40):
     """Previous token scores — same as 03 but shown in TL-comparison context."""
@@ -176,11 +159,7 @@ def run_manual_pt_score(W, k=40):
     pt_scores /= (S - 1)
     return pt_scores
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # SECTION C: WHAT TO VERIFY ON REAL MACHINE
-# ══════════════════════════════════════════════════════════════════════════════
-
 def print_real_machine_checklist():
     print("=" * 65)
     print("  Checklist: What to verify on your own machine (real GPT-2)")
@@ -233,10 +212,7 @@ def print_real_machine_checklist():
     print()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
 # SECTION D: OPTIONAL — REAL TL (if --real flag + HF access)
-# ══════════════════════════════════════════════════════════════════════════════
-
 def run_real_tl_comparison(tok):
     """
     Requires: pip install transformer_lens
@@ -306,12 +282,8 @@ def run_real_tl_comparison(tok):
 
     print(f"\n  Top-5 induction heads (manual): {top_manual}")
     print(f"  Top-5 induction heads (TL):     {top_tl}")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
+  
 # MAIN
-# ══════════════════════════════════════════════════════════════════════════════
-
 if __name__ == "__main__":
     tok = get_tokenizer()
     W   = build_synthetic_weights(device=DEVICE)
