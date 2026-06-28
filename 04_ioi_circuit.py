@@ -5,29 +5,24 @@ Wang et al. (2022) "Interpretability in the Wild: a Circuit for IOI in GPT-2 sma
 https://arxiv.org/abs/2211.00593
 
 Full circuit (simplified):
-┌─────────────────────────────────────────────────────────────────────┐
-│  Layers 0-5:  DUPLICATE TOKEN HEADS                                 │
-│    Detect that S appears twice.                                      │
-│    Write "S is duplicated" signal into residual at S2 position.     │
-│    Known heads: L0H1, L0H10, L1H8, L3H0                            │
-│                                                                      │
-│  Layers 5-7:  INDUCTION HEADS (repurposed for IOI)                  │
-│    Help identify S2 via induction-like mechanism.                    │
-│                                                                      │
-│  Layers 7-8:  S-INHIBITION HEADS                                    │
-│    Read "S is duplicated" from residual.                             │
-│    Suppress writing S to output.                                     │
-│    Known heads: L7H3, L7H9, L8H6, L8H10                            │
-│                                                                      │
-│  Layers 9-10: NAME MOVER HEADS                                      │
-│    Copy IO token's embedding to final position.                      │
-│    Inhibited from copying S (by S-inhibition heads).                │
-│    Known heads: L9H6, L9H9, L10H0                                   │
-│                                                                      │
-│  Layers 9-10: BACKUP NAME MOVERS                                    │
-│    Redundant copies of NMH. Activate when NMH is ablated.           │
-│    Known: L9H1, L10H6, L10H10                                       │
-└─────────────────────────────────────────────────────────────────────┘
+
+   Layers 0-5: DUPLICATE TOKEN HEADS
+         Detect that S appears twice.
+         Write "S is duplicated" signal into residual at S2 position.
+         Known heads: L0H1, L0H10, L1H8, L3H0.
+   Layers 5-7:  INDUCTION HEADS (repurposed for IOI)
+         Help identify S2 via induction-like mechanism.
+   Layers 7-8:  S-INHIBITION HEADS
+         Read "S is duplicated" from residual.
+         Suppress writing S to output.
+         Known heads: L7H3, L7H9, L8H6, L8H10.
+   Layers 9-10: NAME MOVER HEADS
+         Copy IO token's embedding to final position.
+         Inhibited from copying S (by S-inhibition heads).
+         Known heads: L9H6, L9H9, L10H0.
+   Layers 9-10: BACKUP NAME MOVERS
+         Redundant copies of NMH. Activate when NMH is ablated.
+         Known: L9H1, L10H6, L10H10.
 
 This script:
     A. Verifies Name Mover Heads — ablate → LD drops
@@ -49,15 +44,11 @@ from core.visualize import plot_single_head, plot_logit_diff_by_head, plot_patch
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# ══════════════════════════════════════════════════════════════════════════════
 # PROMPT SETUP
-# ══════════════════════════════════════════════════════════════════════════════
-
 CLEAN_PROMPT = "When Mary and John went to the store, John gave a drink to"
 CORR_PROMPT  = "When John and Mary went to the store, Mary gave a drink to"
 IO_NAME      = " Mary"
 S_NAME       = " John"
-
 
 def get_token_positions(prompt: str, tok) -> dict:
     """
@@ -83,11 +74,7 @@ def get_token_positions(prompt: str, tok) -> dict:
 
     return {"io": io_pos, "s": s_pos, "end": end_pos}
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # HEAD ABLATION SWEEP
-# ══════════════════════════════════════════════════════════════════════════════
-
 def ablate_head(
     tokens:   torch.Tensor,
     layer:    int,
@@ -113,7 +100,6 @@ def ablate_head(
     with torch.no_grad():
         logits, _ = gpt2_forward(tokens, W, patches={key: patch_val})
     return logits
-
 
 def sweep_ablations(
     tokens:    torch.Tensor,
@@ -141,11 +127,7 @@ def sweep_ablations(
 
     return deltas
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # OV CIRCUIT ANALYSIS
-# ══════════════════════════════════════════════════════════════════════════════
-
 def compute_ov_circuit(
     W:     dict,
     layer: int,
@@ -171,7 +153,7 @@ def compute_ov_circuit(
             where W_E = wte.weight [50257, 768]
 
         If the top predictions of copy_logits for input token t are t itself,
-        the head is a "copy head" (typical for Name Mover Heads in IOI).
+        The head is a "copy head" (typical for Name Mover Heads in IOI).
 
     Returns: [768, 768] OV matrix
     """
@@ -186,7 +168,6 @@ def compute_ov_circuit(
     W_V_h   = W_qkv[:, v_start:v_start + Dh]
     W_O_h   = W_o.reshape(H, Dh, D)[head]
     return W_V_h @ W_O_h
-
 
 def top_copy_logits(
     W:          dict,
@@ -212,11 +193,7 @@ def top_copy_logits(
         input_word   = tok.decode([tok_id])
         print(f"    Input: '{input_word}' → OV output top-{top_k}: {top_words}")
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # ATTENTION PATTERN ANALYSIS — WHERE DOES EACH HEAD ATTEND?
-# ══════════════════════════════════════════════════════════════════════════════
-
 def analyse_head_attention(
     clean_ids:  torch.Tensor,
     W:          dict,
@@ -254,11 +231,7 @@ def analyse_head_attention(
         )
         print(f"  Saved figures/ioi_attn_L{L}H{H}.png")
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # CIRCUIT COMPONENT VERIFICATION
-# ══════════════════════════════════════════════════════════════════════════════
-
 def verify_name_movers(
     clean_ids: torch.Tensor,
     io_token:  int,
@@ -292,7 +265,6 @@ def verify_name_movers(
         print("  ✓ Name Mover Heads confirmed: ablating them hurts IOI.")
     else:
         print("  ? Smaller than expected drop — may differ from literature.")
-
 
 def verify_s_inhibition(
     clean_ids:  torch.Tensor,
@@ -331,11 +303,7 @@ def verify_s_inhibition(
     print("  Note: S-inhibition ablation effect direction depends on mechanistic details.")
     print("  See FINDINGS.md for your observed direction.")
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # MAIN
-# ══════════════════════════════════════════════════════════════════════════════
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default=None, help="HF model name (gpt2, gpt2-xl, etc). Omit for synthetic.")
@@ -354,7 +322,7 @@ if __name__ == "__main__":
     print("═" * 60)
     print(f"\nClean prompt: '{CLEAN_PROMPT}'")
 
-    # ── Tokenise and find positions ────────────────────────────────────────────
+    # Tokenise and find positions
     clean_ids = tokenize(CLEAN_PROMPT, tok, DEVICE)
     corr_ids  = tokenize(CORR_PROMPT,  tok, DEVICE)
     io_token  = tok.encode(IO_NAME)[0]
@@ -363,7 +331,7 @@ if __name__ == "__main__":
     print("\nToken positions (clean):")
     pos = get_token_positions(CLEAN_PROMPT, tok)
 
-    # ── Baselines ──────────────────────────────────────────────────────────────
+    # Baselines
     with torch.no_grad():
         logits_clean, _ = gpt2_forward(clean_ids, W)
         logits_corr,  _ = gpt2_forward(corr_ids,  W)
@@ -373,22 +341,22 @@ if __name__ == "__main__":
     print(f"\nBaseline LD (clean):     {ld_clean:+.3f}")
     print(f"Baseline LD (corrupted): {ld_corr:+.3f}")
 
-    # ── Ablation sweep ─────────────────────────────────────────────────────────
+    # Ablation sweep
     deltas = sweep_ablations(clean_ids, io_token, s_token, W, ld_clean)
     torch.save(deltas, "figures/ablation_deltas.pt")
     plot_logit_diff_by_head(deltas, fname="ablation_by_head.png")
 
-    # ── Component verification ─────────────────────────────────────────────────
+    # Component verification
     verify_name_movers(clean_ids, io_token, s_token, W, ld_clean)
     verify_s_inhibition(clean_ids, io_token, s_token, W, ld_clean)
 
-    # ── Attention patterns of key heads ───────────────────────────────────────
+    # Attention patterns of key heads
     key_heads = [(9, 9), (9, 6), (10, 0),   # Name Movers
                  (7, 3), (7, 9),             # S-Inhibition
                  (0, 1), (3, 0)]             # Duplicate Token
     analyse_head_attention(clean_ids, W, tok, key_heads)
 
-    # ── OV circuit — do Name Movers copy? ─────────────────────────────────────
+    # OV circuit — do Name Movers copy?
     print("\nOV circuit analysis — Name Mover Heads:")
     test_ids = [io_token, s_token]
     for L, H in [(9, 9), (9, 6), (10, 0)]:
