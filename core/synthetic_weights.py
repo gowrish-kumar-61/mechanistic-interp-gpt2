@@ -2,17 +2,15 @@
 Synthetic GPT-2 weight generation with PLANTED circuits.
 
 Why this approach?
-──────────────────
-Real GPT-2 weights require downloading from HuggingFace (403 in sandbox).
+Real GPT-2 weights must be downloaded from HuggingFace (403 in sandbox).
 This file does something MORE instructive:
   1. Init all 117M parameters per GPT-2 init scheme (N(0, 0.02), scaled residuals)
   2. SURGICALLY plant a Previous Token Head (PTH) at L3H0
   3. SURGICALLY plant an Induction Head (IH) at L5H1
-  4. Detection pipeline should find EXACTLY these two heads
+  4. The Detection pipeline should find EXACTLY these two heads
      → Proves detection works; ground truth is known
 
 Mathematical construction of planted circuits:
-──────────────────────────────────────────────
 
 PREVIOUS TOKEN HEAD (PTH) at L3H0:
   Goal: A[i, i-1] >> A[i, j≠i-1]   (attend to previous token's position)
@@ -21,7 +19,7 @@ PREVIOUS TOKEN HEAD (PTH) at L3H0:
     x[j] = tok_embed(t_j) + pos_embed(j)
   
   If we set W_Q = W_K = P @ wpe.T where P is a projection that extracts
-  the positional component and amplifies it, then:
+  The positional component amplifies it, then:
     Q[i] = P @ wpe[i]
     K[j] = P @ wpe[j]
     score(i,j) = Q[i] · K[j] / √Dh = wpe[i]ᵀ PᵀP wpe[j] / √Dh
@@ -29,10 +27,10 @@ PREVIOUS TOKEN HEAD (PTH) at L3H0:
   We want score(i, i-1) >> score(i, j≠i-1).
   Construction: Set W_Q ← α * wpe[1:]ᵀ ... 
   
-  Simpler: Use outer product trick.
+  Simpler: Use the outer product trick.
   Let v_pos = wpe.mean(0)  (average position direction)
   Set W_Q = W_K = α * v_pos.outer(v_pos)  [768, 64]  — project then amplify
-  But this makes ALL positions look the same...
+  This makes ALL positions look the same...
   
   REAL construction:
   Set W_Q[:, :] = α * wpe.T    [768, 64]  (each head dim maps to a pos embedding)
@@ -83,7 +81,7 @@ import math
 import numpy as np
 from typing import Dict
 
-# ── Constants matching GPT-2 Small ────────────────────────────────────────────
+# Constants matching GPT-2 Small
 D_MODEL  = 768
 N_LAYERS = 12
 N_HEADS  = 12
@@ -92,7 +90,7 @@ D_MLP    = 3072
 N_CTX    = 1024
 VOCAB    = 50257
 
-# ── Planted circuit config ─────────────────────────────────────────────────────
+# Planted circuit config
 PTH_LAYER = 3   # Previous Token Head layer
 PTH_HEAD  = 0   # Previous Token Head index
 IH_LAYER  = 5   # Induction Head layer
@@ -100,11 +98,9 @@ IH_HEAD   = 1   # Induction Head index
 
 CIRCUIT_STRENGTH = 15.0   # Scale for planted circuit signals
 
-
 def _init_weight(shape, std=0.02) -> torch.Tensor:
     """GPT-2 default weight init: N(0, 0.02)."""
     return torch.randn(*shape) * std
-
 
 def _init_residual_weight(shape, n_layer=N_LAYERS, std=0.02) -> torch.Tensor:
     """
@@ -113,18 +109,17 @@ def _init_residual_weight(shape, n_layer=N_LAYERS, std=0.02) -> torch.Tensor:
     Applied to: c_proj weights (output projections for attn + MLP).
     """
     return torch.randn(*shape) * (std / math.sqrt(2 * n_layer))
-
-
+  
 def build_synthetic_weights(seed: int = 42, device: str = "cpu") -> Dict[str, torch.Tensor]:
     """
-    Build full GPT-2 Small weight dict with planted induction circuits.
+    Build a full GPT-2 Small weight dict with planted induction circuits.
 
     Returns dict with SAME keys as HuggingFace GPT2LMHeadModel.named_parameters().
     """
     torch.manual_seed(seed)
     W = {}
 
-    # ── Embeddings ─────────────────────────────────────────────────────────────
+    # Embeddings
     # Token embedding: [50257, 768]  — each row is a token's embedding
     W["transformer.wte.weight"] = _init_weight((VOCAB, D_MODEL))
 
@@ -141,11 +136,11 @@ def build_synthetic_weights(seed: int = 42, device: str = "cpu") -> Dict[str, to
     wpe = wpe + torch.randn(N_CTX, D_MODEL) * 0.01  # small noise
     W["transformer.wpe.weight"] = wpe
 
-    # ── Final LayerNorm ─────────────────────────────────────────────────────────
+    # Final LayerNorm
     W["transformer.ln_f.weight"] = torch.ones(D_MODEL)
     W["transformer.ln_f.bias"]   = torch.zeros(D_MODEL)
 
-    # ── Transformer layers ──────────────────────────────────────────────────────
+    # Transformer layers
     for L in range(N_LAYERS):
         p = f"transformer.h.{L}"
 
@@ -157,15 +152,15 @@ def build_synthetic_weights(seed: int = 42, device: str = "cpu") -> Dict[str, to
         W[f"{p}.ln_2.weight"] = torch.ones(D_MODEL)
         W[f"{p}.ln_2.bias"]   = torch.zeros(D_MODEL)
 
-        # ── Attention: c_attn [768, 2304] (Q, K, V concatenated) ───────────────
+        # Attention: c_attn [768, 2304] (Q, K, V concatenated)
         W_qkv = _init_weight((D_MODEL, 3 * D_MODEL), std=0.02)
         b_qkv = torch.zeros(3 * D_MODEL)
 
-        # ── Plant PTH at specified layer/head ──────────────────────────────────
+        # Plant PTH at specified layer/head
         if L == PTH_LAYER:
             W_qkv, b_qkv = _plant_pth(W_qkv, b_qkv, PTH_HEAD, wpe)
 
-        # ── Plant IH at specified layer/head ───────────────────────────────────
+        # Plant IH at specified layer/head
         if L == IH_LAYER:
             W_qkv, b_qkv = _plant_ih(
                 W_qkv, b_qkv, IH_HEAD,
@@ -176,11 +171,11 @@ def build_synthetic_weights(seed: int = 42, device: str = "cpu") -> Dict[str, to
         W[f"{p}.attn.c_attn.weight"] = W_qkv  # [768, 2304]
         W[f"{p}.attn.c_attn.bias"]   = b_qkv  # [2304]
 
-        # ── Attention output projection: c_proj [768, 768] ─────────────────────
+        # Attention output projection: c_proj [768, 768]
         W[f"{p}.attn.c_proj.weight"] = _init_residual_weight((D_MODEL, D_MODEL))
         W[f"{p}.attn.c_proj.bias"]   = torch.zeros(D_MODEL)
 
-        # ── MLP: c_fc [768, 3072], c_proj [3072, 768] ─────────────────────────
+        # MLP: c_fc [768, 3072], c_proj [3072, 768]
         W[f"{p}.mlp.c_fc.weight"]   = _init_weight((D_MODEL, D_MLP))
         W[f"{p}.mlp.c_fc.bias"]     = torch.zeros(D_MLP)
         W[f"{p}.mlp.c_proj.weight"] = _init_residual_weight((D_MLP, D_MODEL))
@@ -192,7 +187,6 @@ def build_synthetic_weights(seed: int = 42, device: str = "cpu") -> Dict[str, to
           f"~{sum(p.numel() for p in W.values())/1e6:.1f}M params")
     print(f"Planted PTH -> L{PTH_LAYER}H{PTH_HEAD}  |  IH -> L{IH_LAYER}H{IH_HEAD}")
     return W
-
 
 def _plant_pth(
     W_qkv: torch.Tensor,   # [768, 2304]  (to be modified in-place)
@@ -296,10 +290,8 @@ def _plant_ih(
 
     return W_qkv, b_qkv
 
-
 def total_params(W: dict) -> int:
     return sum(v.numel() for v in W.values())
-
 
 def print_weight_table(W: dict) -> None:
     """Print every tensor name + shape + params (same format as real GPT-2 inspection)."""
