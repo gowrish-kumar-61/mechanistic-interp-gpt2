@@ -2,7 +2,7 @@
 Offline tokenizer for mechanistic interpretability experiments.
 
 Why not HuggingFace GPT2Tokenizer?
-───────────────────────────────────
+
 Both HuggingFace and tiktoken download vocab.bpe / encoder.json from
   https://openaipublic.blob.core.windows.net/gpt-2/...
 which is blocked in this sandbox environment.
@@ -35,8 +35,8 @@ import re
 import torch
 from typing import List, Optional, Union
 
-# Fixed GPT-2-like vocabulary for common words / subwords
-# IDs chosen to not overlap with BOS/EOS/PAD (0-3)
+# Fixed GPT-2-like vocabulary for common words/subwords
+# IDs chosen not to overlap with BOS/EOS/PAD (0-3)
 # Names used in IOI experiments get stable low IDs
 _FIXED_VOCAB = {
     "<|endoftext|>": 0,
@@ -81,7 +81,6 @@ _FIXED_VOCAB = {
 
 # Build reverse mapping (id → token)
 _ID_TO_TOKEN = {v: k for k, v in _FIXED_VOCAB.items()}
-
 
 class MockTokenizer:
     """
