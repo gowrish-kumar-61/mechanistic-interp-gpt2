@@ -8,17 +8,14 @@ Theory:
         At second 'A', attend to position of first 'B' (= first A + 1)
 
     Two-head circuit (Olsson et al. 2022):
-        ┌─────────────────────────────────────────────────────────┐
-        │ Previous Token Head  (PTH) — early layer               │
-        │   At position j: attends to j-1                        │
-        │   Writes "what came before me" into residual           │
-        │                                                         │
-        │ Induction Head (IH) — later layer, uses PTH output    │
-        │   Q[i] ∝ embedding of t_i                              │
-        │   K[j] ∝ embedding of t_{j-1}  (from PTH)             │
-        │   → high attention when t_{j-1} = t_i                  │
-        │   V[j] ≈ t_j  →  copies "what followed t_i before"    │
-        └─────────────────────────────────────────────────────────┘
+         Previous Token Head  (PTH) — early layer
+              At position j: attends to j-1
+         Writes "what came before me" into residual
+         Induction Head (IH) — later layer, uses PTH output
+           Q[i] ∝ embedding of t_i
+           K[j] ∝ embedding of t_{j-1}  (from PTH)
+           → high attention when t_{j-1} = t_i
+         V[j] ≈ t_j  →  copies "what followed t_i before"
 
 Detection — Induction Score:
     1. Build repeated sequence: [a₁ a₂ … aₖ  a₁ a₂ … aₖ]   len = 2k
@@ -52,11 +49,7 @@ from core.visualize import (
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # BUILD REPEATED TOKEN SEQUENCE
-# ══════════════════════════════════════════════════════════════════════════════
-
 def make_repeated_tokens(seq_half: int = 50, seed: int = 42) -> torch.Tensor:
     """
     Random tokens, repeated:  [t₀ t₁ … t_{k-1}  t₀ t₁ … t_{k-1}]
@@ -69,7 +62,6 @@ def make_repeated_tokens(seq_half: int = 50, seed: int = 42) -> torch.Tensor:
     half   = torch.randint(1000, 50000, (1, seq_half))   # [1, k]
     tokens = torch.cat([half, half], dim=1)               # [1, 2k]
     return tokens.to(DEVICE)
-
 
 def extract_all_patterns(tokens: torch.Tensor, W: dict) -> torch.Tensor:
     """
@@ -86,11 +78,7 @@ def extract_all_patterns(tokens: torch.Tensor, W: dict) -> torch.Tensor:
         patterns[L] = cache[f"attn.{L}.pattern"][0]
     return patterns
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # INDUCTION SCORE
-# ══════════════════════════════════════════════════════════════════════════════
-
 def induction_score(patterns: torch.Tensor, seq_half: int) -> torch.Tensor:
     """
     patterns : [L, H, 2k, 2k]
@@ -102,7 +90,7 @@ def induction_score(patterns: torch.Tensor, seq_half: int) -> torch.Tensor:
         Destination position: k+i  (token i in the second copy)
         Source position:      i+1  (token AFTER first occurrence of t_i)
 
-        At position k+i, current token = t_i (same as position i in first copy).
+        At position k+i, current token = t_i (same as position i in the first copy).
         Induction head should look at position i+1 = "what followed t_i before".
     """
     L, H, two_k, _ = patterns.shape
@@ -117,11 +105,7 @@ def induction_score(patterns: torch.Tensor, seq_half: int) -> torch.Tensor:
     score /= (k - 1)
     return score   # [L, H]
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # PREVIOUS TOKEN SCORE
-# ══════════════════════════════════════════════════════════════════════════════
-
 def prev_token_score(patterns: torch.Tensor) -> torch.Tensor:
     """
     patterns : [L, H, S, S]
@@ -139,11 +123,7 @@ def prev_token_score(patterns: torch.Tensor) -> torch.Tensor:
     score /= (S - 1)
     return score
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # PRINT TOP HEADS
-# ══════════════════════════════════════════════════════════════════════════════
-
 def print_top_heads(scores: torch.Tensor, label: str, top_n: int = 10) -> None:
     L, H = scores.shape
     flat  = [(f"L{l}H{h}", scores[l, h].item())
@@ -154,11 +134,7 @@ def print_top_heads(scores: torch.Tensor, label: str, top_n: int = 10) -> None:
         bar = "█" * max(1, int(val * 40))
         print(f"  {name:<7} score={val:.4f}  {bar}")
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # VISUALISE SPECIFIC HEADS
-# ══════════════════════════════════════════════════════════════════════════════
-
 def visualise_head(
     patterns: torch.Tensor,   # [L, H, S, S]
     layer: int,
@@ -180,11 +156,7 @@ def visualise_head(
     )
     print(f"  Plotted L{layer}H{head} → figures/induction_L{layer}H{head}.png")
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # ABLATION VERIFICATION
-# ══════════════════════════════════════════════════════════════════════════════
-
 def verify_induction_circuit(W: dict, tok, seq_half: int = 30,
                              ih_scores=None, pt_scores=None) -> None:
     """
@@ -238,11 +210,7 @@ def verify_induction_circuit(W: dict, tok, seq_half: int = 30,
     else:
         print("  [?] Minimal drop. Heads may not be causal for this task.")
 
-
-# ══════════════════════════════════════════════════════════════════════════════
 # MAIN
-# ══════════════════════════════════════════════════════════════════════════════
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default=None, help="HF model name (gpt2, gpt2-xl, etc). Omit for synthetic.")
@@ -264,7 +232,7 @@ if __name__ == "__main__":
     patterns = extract_all_patterns(tokens, W)   # [12, 12, 100, 100]
     print(f"Patterns shape: {patterns.shape}")
 
-    # ── Scores ─────────────────────────────────────────────────────────────────
+    # Scores
     ih_scores  = induction_score(patterns,    seq_half=SEQ_HALF)   # [L, H]
     pt_scores  = prev_token_score(patterns)                         # [L, H]
     torch.save(ih_scores, "figures/induction_scores.pt")
@@ -273,11 +241,11 @@ if __name__ == "__main__":
     print_top_heads(ih_scores,  "Induction Heads")
     print_top_heads(pt_scores,  "Previous Token Heads")
 
-    # ── Heatmaps ───────────────────────────────────────────────────────────────
+    # Heatmaps
     plot_induction_scores(ih_scores, fname="induction_scores.png")
     plot_induction_scores(pt_scores, fname="prev_token_scores.png")
 
-    # ── Visualise top heads ────────────────────────────────────────────────────
+    # Visualise top heads
     nL, nH = ih_scores.shape
     flat_ih = [(l, h, ih_scores[l, h].item()) for l in range(nL) for h in range(nH)]
     top3_ih = sorted(flat_ih, key=lambda x: x[2], reverse=True)[:3]
@@ -291,7 +259,7 @@ if __name__ == "__main__":
     for l, h, sc in top3_pt:
         print(f"  L{l}H{h} PT-score={sc:.4f}")
 
-    # ── Verify circuit causally ────────────────────────────────────────────────
+    # Verify circuit causally
     verify_induction_circuit(W, tok, seq_half=30, ih_scores=ih_scores, pt_scores=pt_scores)
 
     print("\n03 complete. Compare your top-induction heads to literature:")
