@@ -15,7 +15,6 @@ from typing import List, Optional
 OUTPUT_DIR = "figures"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-
 def _save(name: str, show: bool = False) -> None:
     path = os.path.join(OUTPUT_DIR, name)
     plt.tight_layout()
@@ -25,8 +24,7 @@ def _save(name: str, show: bool = False) -> None:
         plt.show()
     plt.close()
 
-
-# ── Attention pattern grid ─────────────────────────────────────────────────────
+# Attention pattern grid
 
 def plot_attn_patterns(
     patterns:   torch.Tensor,          # [L, H, S, S]  or  [H, S, S]
@@ -74,7 +72,7 @@ def plot_attn_patterns(
     _save(fname, show)
 
 
-# ── Induction score heatmap ────────────────────────────────────────────────────
+# Induction score heatmap
 
 def plot_induction_scores(
     scores: torch.Tensor,      # [L, H]
@@ -102,8 +100,7 @@ def plot_induction_scores(
     _save(fname, show)
 
 
-# ── Activation patching heatmap ───────────────────────────────────────────────
-
+# Activation patching heatmap
 def plot_patching_heatmap(
     results:  torch.Tensor,     # [L, H]  patching effect (0..1 normalised)
     title:    str  = "Activation Patching",
@@ -117,7 +114,7 @@ def plot_patching_heatmap(
     data = results.float().cpu().numpy()
     L, H = data.shape
     fig, ax = plt.subplots(figsize=(H * 0.8, L * 0.7))
-    sns.heatmap(
+    sns. heatmap(
         data, ax=ax,
         xticklabels=[f"H{h}" for h in range(H)],
         yticklabels=[f"L{l}" for l in range(L)],
@@ -131,9 +128,7 @@ def plot_patching_heatmap(
     ax.set_ylabel("Layer")
     _save(fname, show)
 
-
-# ── Single attention head ──────────────────────────────────────────────────────
-
+# Single attention head
 def plot_single_head(
     pattern:  torch.Tensor,     # [S, S]
     tokens:   List[str],
@@ -154,9 +149,7 @@ def plot_single_head(
     fname = fname or f"attn_L{layer}H{head}.png"
     _save(fname, show)
 
-
-# ── Logit difference bar chart ────────────────────────────────────────────────
-
+# Logit difference bar chart
 def plot_logit_diff_by_head(
     deltas:     torch.Tensor,    # [L, H]  change in LD from ablation
     fname:      str  = "logit_diff_by_head.png",
