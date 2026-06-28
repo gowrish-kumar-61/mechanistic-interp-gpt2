@@ -16,8 +16,6 @@ HuggingFace is blocked in this environment. We use analytically-constructed
 weights with PLANTED circuits. Detection results prove the pipeline works.
 On your machine: swap `build_synthetic_weights()` → `load_weights()` in every script.
 
----
-
 ## 0. Setup Verification (Script 01)
 
 | Tensor | Expected shape | Actual | ✓/✗ |
@@ -39,8 +37,6 @@ PTH check on "Hello world foo bar baz":
 - Previous-token score L3H0 = 0.4637 ✓
 
 **Real GPT-2 expected:** max logit deviation < 5e-4 vs HuggingFace
-
----
 
 ## 1. Induction Head Detection (Script 03)
 
@@ -75,8 +71,6 @@ Detection is unambiguous. This is exactly the signal we'd see for real GPT-2 PTH
 - L5H1 IH score ≈ 0.94, L5H5 ≈ 0.87, L6H9 ≈ 0.82
 - L3H0 PT score ≈ 0.80+, L4H11 ≈ 0.7+
 
----
-
 ## 2. Activation Patching (Script 02)
 
 ### Induction Task Baselines
@@ -97,8 +91,6 @@ logits. Signal is correct at attention pattern level; washed out at logit level.
 - LD corrupted: -2.5 to -4.0
 - Recovery at L9H9 ≈ 0.15, L9H6 ≈ 0.12 (Name Movers)
 - Resid patching shows jump at L8 → L9 boundary
-
----
 
 ## 3. IOI Circuit (Script 04)
 
@@ -134,8 +126,6 @@ self and previous token. The planted W_Q/W_K via position SVD is working.
 
 **Real GPT-2 expected:** L9H9 OV cosine ≈ 0.35–0.45 (strong copy behavior)
 
----
-
 ## 4. TransformerLens Comparison (Script 05)
 
 ### API Mapping (verified)
@@ -153,8 +143,6 @@ cache["attn.5.z"].shape = (1, 12, 80, 64)  ✓  [B, H, S, Dh]
 TL gives (1, 80, 12, 64)  ← permute(0,2,1,3) to convert
 ```
 
----
-
 ## 5. What Surprised Me
 
 1. **PTH detection is extremely clean.** L3H0 PT-score = 0.87 vs random baseline 0.045 — 19× ratio. Even with random downstream layers, the attention pattern is measurably distinct.
@@ -165,8 +153,6 @@ TL gives (1, 80, 12, 64)  ← permute(0,2,1,3) to convert
 
 4. **L5H1 also shows elevated PT-score (0.28).** This is because W_Q ≈ W_K in token subspace → heads tend to attend to similar tokens, which by coincidence slightly favors previous positions in this architecture.
 
----
-
 ## 6. What Broke My Hypotheses
 
 - **Hypothesis:** Planting correct Q/K/V would be sufficient for IH detection via induction score.
@@ -174,8 +160,6 @@ TL gives (1, 80, 12, 64)  ← permute(0,2,1,3) to convert
 
 - **Hypothesis:** OV cosine similarity would clearly distinguish planted IH from random heads.
 - **Reality:** Random W_O dominates. Cosine values are all < 0.05 in magnitude.
-
----
 
 ## 7. Next Steps (Real GPT-2)
 
@@ -185,12 +169,6 @@ TL gives (1, 80, 12, 64)  ← permute(0,2,1,3) to convert
 4. **Verify 02 IOI**: LD gap ≈ 5–8, top recovery heads = L9H6, L9H9, L10H0.
 5. **Verify 04 OV**: L9H9 cosine ≈ 0.35–0.45 (copy head confirmed).
 6. **Run 05 --real**: Confirm TL induction scores match within 0.02.
-
-For MATS application: write 2-page report from findings above.
-Focus on: induction head two-layer circuit (clearest finding), OV circuit analysis,
-methodology (why synthetic planted circuits are more rigorous than post-hoc matching).
-
----
 
 ## 8. Code Architecture Decisions
 
