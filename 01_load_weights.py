@@ -7,7 +7,7 @@ Real GPT-2 requires HuggingFace (network blocked in this env).
 We use synthetic GPT-2 weights with PLANTED circuits:
   • PTH planted at L3H0  (previous token head)
   • IH  planted at L5H1  (induction head)
-Detection pipeline in 03 should find EXACTLY these two heads.
+The detection pipeline in 03 should find EXACTLY these two heads.
 This is ground-truth validation — more rigorous than post-hoc checking.
 
 On your own machine: replace load_weights() call with:
@@ -33,7 +33,6 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Device: {DEVICE}\n")
 
 # 1. ARCHITECTURE MATH
-
 def print_arch_math():
     d_model, n_heads, d_head = 768, 12, 64
     d_mlp, n_layers, vocab   = 3072, 12, 50257
@@ -64,9 +63,9 @@ def print_arch_math():
     print(f"  Memory FP16:            {params*2/1024**2:.0f} MB")
     print()
 
-    # Residual stream at each position is 768-dim vector
+    # Residual stream at each position is a 768-dim vector
     # Each layer reads from it (via LN) and writes ADDITIVE updates
-    # Key insight: superposition — multiple features share same 768-dim space
+    # Key insight: superposition — multiple features share the same 768-dim space
     print("  Residual stream = 768-dim information highway")
     print("  Each layer writes: Δx = Attn_out + MLP_out")
     print("  Attention reads via Q,K,V; MLP is a lookup table")
