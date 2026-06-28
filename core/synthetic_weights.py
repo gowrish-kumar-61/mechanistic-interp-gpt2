@@ -190,7 +190,7 @@ def build_synthetic_weights(seed: int = 42, device: str = "cpu") -> Dict[str, to
     W = {k: v.to(device) for k, v in W.items()}
     print(f"Built synthetic GPT-2 weights: {len(W)} tensors, "
           f"~{sum(p.numel() for p in W.values())/1e6:.1f}M params")
-    print(f"Planted PTH → L{PTH_LAYER}H{PTH_HEAD}  |  IH → L{IH_LAYER}H{IH_HEAD}")
+    print(f"Planted PTH -> L{PTH_LAYER}H{PTH_HEAD}  |  IH -> L{IH_LAYER}H{IH_HEAD}")
     return W
 
 
@@ -315,18 +315,22 @@ def print_weight_table(W: dict) -> None:
     print(f"  Total: {total:,}  ({total/1e6:.1f}M)")
     print()
 
-    # Shape assertions
+    # Shape consistency checks (derived from weights, works for any GPT-2 variant)
+    d = W["transformer.wte.weight"].shape[1]
+    v = W["transformer.wte.weight"].shape[0]
+    c = W["transformer.wpe.weight"].shape[0]
+    m = W["transformer.h.0.mlp.c_fc.weight"].shape[1]
     expected = [
-        ("transformer.wte.weight",              (VOCAB, D_MODEL)),
-        ("transformer.wpe.weight",              (N_CTX, D_MODEL)),
-        ("transformer.h.0.attn.c_attn.weight",  (D_MODEL, 3*D_MODEL)),
-        ("transformer.h.0.attn.c_proj.weight",  (D_MODEL, D_MODEL)),
-        ("transformer.h.0.mlp.c_fc.weight",     (D_MODEL, D_MLP)),
-        ("transformer.h.0.mlp.c_proj.weight",   (D_MLP, D_MODEL)),
+        ("transformer.wte.weight",              (v, d)),
+        ("transformer.wpe.weight",              (c, d)),
+        ("transformer.h.0.attn.c_attn.weight",  (d, 3*d)),
+        ("transformer.h.0.attn.c_proj.weight",  (d, d)),
+        ("transformer.h.0.mlp.c_fc.weight",     (d, m)),
+        ("transformer.h.0.mlp.c_proj.weight",   (m, d)),
     ]
-    print("Shape assertions:")
+    print("Shape checks:")
     for key, exp in expected:
         act = tuple(W[key].shape)
-        ok = "✓" if act == exp else f"✗ expected {exp}"
+        ok = "OK" if act == exp else f"FAIL expected {exp}"
         print(f"  {key.split('.')[-1]:<35} {str(act):<20} {ok}")
     print()

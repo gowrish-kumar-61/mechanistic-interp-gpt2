@@ -185,60 +185,58 @@ def visualise_head(
 # ABLATION VERIFICATION
 # ══════════════════════════════════════════════════════════════════════════════
 
-def verify_induction_circuit(W: dict, tok, seq_half: int = 30) -> None:
+def verify_induction_circuit(W: dict, tok, seq_half: int = 30,
+                             ih_scores=None, pt_scores=None) -> None:
     """
-    Verify that induction heads actually help next-token prediction
-    on repeated sequences by measuring:
-
-        P(correct next token | induction head active)
-    vs  P(correct next token | induction head ablated to zero)
-
-    Ablation = patch attn.L.head.H.out with zeros.
+    Verify induction heads by ablating top-scoring heads and measuring
+    drop in P(correct next token) on repeated sequences.
     """
-    print("\nAblation verification …")
+    print("\nAblation verification ...")
     tokens = make_repeated_tokens(seq_half=seq_half, seed=7)
     B, S   = tokens.shape
     k      = seq_half
 
     with torch.no_grad():
-        logits_normal, _ = gpt2_forward(tokens, W)   # [1, S, V]
+        logits_normal, _ = gpt2_forward(tokens, W)
 
-    # Probability of correct token at positions k+1 … 2k-1 (second copy, skip first)
-    def avg_correct_prob(logits: torch.Tensor) -> float:
-        probs = torch.softmax(logits[0], dim=-1)   # [S, V]
-        correct = 0.0
-        count   = 0
-        for i in range(k, S - 1):
-            correct_id = tokens[0, i + 1].item()
-            correct   += probs[i, correct_id].item()
-            count     += 1
-        return correct / count
+    def avg_correct_prob(logits):
+        probs = torch.softmax(logits[0], dim=-1)
+        total = sum(probs[i, tokens[0, i+1].item()].item() for i in range(k, S-1))
+        return total / (S - 1 - k)
 
     baseline_prob = avg_correct_prob(logits_normal)
     print(f"  Baseline avg P(correct next token, second copy): {baseline_prob:.4f}")
 
-    # Ablate known induction heads (PLANTED ground truth, not literature values —
-    # we're running on synthetic weights, so ablate L5H1 = our planted IH)
-    known_iheads = [(IH_LAYER, IH_HEAD), (PTH_LAYER, PTH_HEAD)]
+    # Auto-detect top heads to ablate from scores
+    if ih_scores is not None and pt_scores is not None:
+        nL, nH = ih_scores.shape
+        ih_top = sorted([(l, h, ih_scores[l, h].item()) for l in range(nL) for h in range(nH)],
+                        key=lambda x: x[2], reverse=True)[:3]
+        pt_top = sorted([(l, h, pt_scores[l, h].item()) for l in range(nL) for h in range(nH)],
+                        key=lambda x: x[2], reverse=True)[:2]
+        ablate_heads = [(l, h) for l, h, _ in ih_top] + [(l, h) for l, h, _ in pt_top]
+    else:
+        ablate_heads = [(IH_LAYER, IH_HEAD), (PTH_LAYER, PTH_HEAD)]
+
     with torch.no_grad():
         _, cache_ref = gpt2_forward(tokens, W)
 
     patches = {
         f"attn.{l}.head.{h}.out": torch.zeros_like(cache_ref[f"attn.{l}.head.{h}.out"])
-        for l, h in known_iheads
+        for l, h in ablate_heads
     }
 
     with torch.no_grad():
         logits_ablated, _ = gpt2_forward(tokens, W, patches=patches)
 
     ablated_prob = avg_correct_prob(logits_ablated)
-    print(f"  After ablating {known_iheads}:")
-    print(f"  Ablated  avg P(correct next token, second copy): {ablated_prob:.4f}")
+    print(f"  Ablating {ablate_heads}:")
+    print(f"  Ablated  avg P(correct): {ablated_prob:.4f}")
     print(f"  Drop: {baseline_prob - ablated_prob:.4f}")
     if baseline_prob - ablated_prob > 0.01:
-        print("  ✓ Ablating these heads DOES hurt induction — circuit verified.")
+        print("  [CONFIRMED] Ablating these heads hurts induction.")
     else:
-        print("  ? Minimal drop. Either heads wrong or ablation indirect.")
+        print("  [?] Minimal drop. Heads may not be causal for this task.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -294,7 +292,7 @@ if __name__ == "__main__":
         print(f"  L{l}H{h} PT-score={sc:.4f}")
 
     # ── Verify circuit causally ────────────────────────────────────────────────
-    verify_induction_circuit(W, tok, seq_half=30)
+    verify_induction_circuit(W, tok, seq_half=30, ih_scores=ih_scores, pt_scores=pt_scores)
 
     print("\n03 complete. Compare your top-induction heads to literature:")
     print("  Expected: L5H1, L5H5, L6H9, L7H10, L7H11")

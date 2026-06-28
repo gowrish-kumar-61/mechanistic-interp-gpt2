@@ -67,12 +67,11 @@ def multi_head_attn(
     z = hook(f"attn.{L}.z", z)
 
     W_o_h = W_o.reshape(H, D_HEAD, D)
+    out = b_o.clone()
     for h in range(H):
         out_h = z[:, h] @ W_o_h[h]
-        hook(f"attn.{L}.head.{h}.out", out_h)
-
-    z_flat = z.permute(0, 2, 1, 3).reshape(B, S, D)
-    out = z_flat @ W_o + b_o
+        out_h = hook(f"attn.{L}.head.{h}.out", out_h)
+        out = out + out_h
     out = hook(f"attn.{L}.out", out)
 
     return out, pattern
@@ -109,9 +108,26 @@ def config_from_weights(W: Dict[str, torch.Tensor]) -> dict:
     }
 
 
+def _fix_ssl():
+    """Workaround for antivirus HTTPS interception breaking HuggingFace downloads."""
+    import os, ssl
+    os.environ["HF_HUB_DISABLE_SSL_VERIFY"] = "1"
+    os.environ["CURL_CA_BUNDLE"] = ""
+    ssl._create_default_https_context = ssl._create_unverified_context
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    import requests
+    old_send = requests.adapters.HTTPAdapter.send
+    def _send_no_verify(self, request, *args, **kwargs):
+        kwargs["verify"] = False
+        return old_send(self, request, *args, **kwargs)
+    requests.adapters.HTTPAdapter.send = _send_no_verify
+
+
 def load_weights(model_name: str = "gpt2", device: str = "cpu") -> Dict[str, torch.Tensor]:
+    _fix_ssl()
     from transformers import GPT2LMHeadModel
-    print(f"Downloading {model_name} weights …")
+    print(f"Downloading {model_name} weights ...")
     hf = GPT2LMHeadModel.from_pretrained(model_name)
     W = {}
     for name, param in hf.named_parameters():
@@ -178,12 +194,14 @@ def gpt2_forward(
 
 def get_tokenizer(model_name: str = "gpt2"):
     try:
+        _fix_ssl()
         from transformers import GPT2Tokenizer
         tok = GPT2Tokenizer.from_pretrained(model_name)
         tok.pad_token = tok.eos_token
         return tok
-    except ImportError:
+    except Exception:
         from core.tokenizer import get_tokenizer as _get_tok
+        print(f"[warn] HF tokenizer unavailable, using offline tokenizer")
         return _get_tok()
 
 

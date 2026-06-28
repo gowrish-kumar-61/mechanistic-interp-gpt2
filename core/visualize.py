@@ -20,7 +20,7 @@ def _save(name: str, show: bool = False) -> None:
     path = os.path.join(OUTPUT_DIR, name)
     plt.tight_layout()
     plt.savefig(path, dpi=150, bbox_inches="tight")
-    print(f"Saved → {path}")
+    print(f"Saved: {path}")
     if show:
         plt.show()
     plt.close()
