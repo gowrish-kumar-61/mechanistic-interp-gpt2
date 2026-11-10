@@ -2,7 +2,7 @@
 
 Manual mechanistic interpretability pipeline for GPT-2. Pure PyTorch — no TransformerLens dependency for the core analysis.
 
-**Status:** all results so far come from synthetic GPT-2 Small weights with two circuits planted by construction (a previous-token head at L3H0 and an induction head at L5H1), used to test the pipeline against a known answer. The planted previous-token head is detected (score 0.87, 19x baseline); the planted induction head is not, because induction needs K-composition from an earlier head. The code loads real GPT-2 weights (Small through XL), but no real-weight results are reported here yet. See [FINDINGS.md](FINDINGS.md).
+**Status:** the manual forward pass matches HuggingFace on real GPT-2 Medium (max logit difference 1.7e-4). On GPT-2 Medium, attention scores pick out induction heads (top: L9H9 0.95, L18H5 0.91) and previous-token heads (L5H11 0.97); zeroing the top five lowers the probability of the correct repeated token from 0.88 to 0.78. On one IOI prompt the model prefers the right name (logit difference +3.29, −2.05 with names swapped), but the GPT-2 Small circuit heads do not carry over to Medium by index. Earlier, synthetic weights with planted circuits tested the pipeline against a known answer. See [FINDINGS.md](FINDINGS.md).
 
 ## What This Does
 
@@ -61,6 +61,12 @@ Any GPT-2 variant — architecture is auto-detected from weight shapes:
 ## Key Findings
 
 See [FINDINGS.md](FINDINGS.md) for detailed experimental results.
+
+**Real GPT-2 Medium:**
+- Manual forward pass matches HuggingFace (max logit difference 1.7e-4)
+- Induction heads L9H9 (0.95), L18H5 (0.91), L11H1 (0.89); previous-token heads L5H11 (0.97), L4H13 (0.96)
+- Ablating the top 5: P(correct repeated token) 0.88 → 0.78
+- IOI, one prompt: logit difference +3.29 clean vs −2.05 swapped; GPT-2 Small's name movers do nothing on Medium
 
 **Synthetic weights (ground-truth validation):**
 - PTH at L3H0 detected with 19× signal-to-noise ratio (PT-score 0.87 vs 0.045 baseline)

@@ -1,5 +1,82 @@
 # Mechanistic Interpretability Pipeline — Findings
 
+Two parts. **Part A** reports runs on the real GPT-2 Medium weights (first run 2026-06-28, re-run and checked 2026-11-10; the numbers below are from the re-run). **Part B** is the earlier ground-truth test on synthetic GPT-2 Small weights with planted circuits.
+
+# Part A — Real GPT-2 Medium (345M, 24 layers × 16 heads)
+
+Commands (CPU, weights from HuggingFace):
+
+```bash
+python check_vs_hf.py --model gpt2-medium
+python 02_activation_patching.py --model gpt2-medium
+python 03_induction_heads.py --model gpt2-medium
+python 04_ioi_circuit.py --model gpt2-medium
+```
+
+## A0. The manual forward pass matches HuggingFace
+
+`check_vs_hf.py` runs the IOI prompt through both `gpt2_forward` and `GPT2LMHeadModel`:
+max |logit difference| = **1.7e-4**, same top-1 next token (" Mary").
+
+## A1. Induction and previous-token heads (script 03)
+
+Sequence: 50 random tokens, repeated once (100 tokens, seed 42).
+Induction score = mean attention from each token in the second copy to the token that followed it in the first copy.
+Previous-token score = mean attention to the immediately preceding token.
+
+| Rank | Induction head | Score | Previous-token head | Score |
+|------|------|------|------|------|
+| 1 | L9H9 | 0.948 | L5H11 | 0.973 |
+| 2 | L18H5 | 0.913 | L4H13 | 0.955 |
+| 3 | L11H1 | 0.893 | L6H7 | 0.955 |
+| 4 | L7H2 | 0.884 | L8H1 | 0.762 |
+| 5 | L12H1 | 0.876 | L13H5 | 0.578 |
+
+The strongest previous-token heads (layers 4–6) sit before the earliest strong induction heads (layers 6–9), which is the order the two-head induction circuit needs. This run does not test the K-composition between them directly.
+
+**Ablation check.** Zeroing the top 3 induction heads and top 2 previous-token heads together, on a different repeated sequence (30 tokens × 2, seed 7):
+average probability of the correct next token in the second copy fell from **0.884 to 0.783** (−0.10, about 11% relative).
+So these heads matter for the behaviour, but the model keeps most of it without them; GPT-2 Medium has many heads scoring above 0.75.
+
+## A2. Indirect object identification (script 04)
+
+One prompt: "When Mary and John went to the store, John gave a drink to" (correct answer " Mary"), and the same prompt with the names swapped.
+
+| Prompt | logit(" Mary") − logit(" John") |
+|--------|-----|
+| Clean | **+3.29** |
+| Names swapped | **−2.05** |
+
+GPT-2 Medium does the task on this prompt.
+
+**The GPT-2 Small circuit does not carry over by head index.** Script 04 ablates the heads Wang et al. (2022) found in GPT-2 *Small*. On Medium they have no effect: ablating the "name movers" L9H6, L9H9 and L10H0 gives +3.36 (no drop), and the "S-inhibition" heads give +3.28. Their OV circuits do not copy names either. Those indices only mean something in GPT-2 Small.
+
+**Single-head ablation sweep (all 384 heads).** Change in the logit difference when each head alone is zeroed (median |change| 0.03):
+
+| Helps the correct answer (ablating lowers it) | | Works against it (ablating raises it) | |
+|---|---|---|---|
+| L15H4 | +0.49 | L18H9 | −0.78 |
+| L19H7 | +0.34 | L23H7 | −0.40 |
+| L19H1 | +0.30 | L23H3 | −0.28 |
+| L23H14 | +0.28 | L3H5 | −0.28 |
+
+These are candidates, not a circuit. They come from one prompt, and no single head moves the answer much, which fits a task spread across many heads.
+
+## A3. Activation patching on the induction task (script 02)
+
+Repeated sequence of 8 common tokens; the corrupted run replaces the second copy. Metric: the logit of the correct next token, averaged over the second copy (clean −45.8, corrupted −77.1).
+Patching one head's output from the clean run into the corrupted run: **L23H4 recovers 32%** of the gap; no other head recovers more than 10%.
+
+Limitation: the residual-stream patching in this script replaces the whole stream at every position, so it trivially recovers 100% at every layer and says nothing. It needs per-position patching to be useful.
+
+## A4. What this does and does not show
+
+- Shows: a pure-PyTorch GPT-2 that matches HuggingFace, induction and previous-token heads found by attention scores in GPT-2 Medium, an ablation effect on induction, and IOI behaviour with a first set of candidate heads.
+- Does not show: a reproduction of Olsson et al. (2022) or Wang et al. (2022). Their induction-head analysis and IOI circuit were not rebuilt here, and the IOI result is from one prompt.
+- Next: run on GPT-2 Small to compare with the published heads directly, average IOI over many prompts, and add per-position residual patching.
+
+# Part B — Synthetic weights with planted circuits
+
 ## Environment
 
 | Item | Value |
@@ -161,7 +238,7 @@ TL gives (1, 80, 12, 64)  ← permute(0,2,1,3) to convert
 - **Hypothesis:** OV cosine similarity would clearly distinguish planted IH from random heads.
 - **Reality:** Random W_O dominates. Cosine values are all < 0.05 in magnitude.
 
-## 7. Next Steps (Real GPT-2)
+## 7. Next Steps (written before the real-weight runs; see Part A)
 
 1. **Swap weights**: `build_synthetic_weights()` → `load_weights()`, one line per script.
 2. **Verify 01**: max_logit_deviation < 5e-4.

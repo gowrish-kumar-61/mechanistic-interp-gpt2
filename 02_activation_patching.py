@@ -222,7 +222,7 @@ if __name__ == "__main__":
     # Heatmap
     plot_patching_heatmap(
         recovery,
-        title=f"Head Output Patching Recovery\n(clean→corrupted, induction task)\nPlanted: L{IH_LAYER}H{IH_HEAD}=IH, L{PTH_LAYER}H{PTH_HEAD}=PTH",
+        title=f"Head Output Patching Recovery\n(clean→corrupted, induction task)\n" + (args.model or f"Planted: L{IH_LAYER}H{IH_HEAD}=IH, L{PTH_LAYER}H{PTH_HEAD}=PTH"),
         fname="patching_heads.png",
     )
 
