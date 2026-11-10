@@ -1,6 +1,8 @@
 # Mechanistic Interpretability on GPT-2
 
-Manual mechanistic interpretability pipeline for GPT-2 (Small through XL). Pure PyTorch — no TransformerLens dependency for the core analysis.
+Manual mechanistic interpretability pipeline for GPT-2. Pure PyTorch — no TransformerLens dependency for the core analysis.
+
+**Status:** all results so far come from synthetic GPT-2 Small weights with two circuits planted by construction (a previous-token head at L3H0 and an induction head at L5H1), used to test the pipeline against a known answer. The planted previous-token head is detected (score 0.87, 19x baseline); the planted induction head is not, because induction needs K-composition from an earlier head. The code loads real GPT-2 weights (Small through XL), but no real-weight results are reported here yet. See [FINDINGS.md](FINDINGS.md).
 
 ## What This Does
 
